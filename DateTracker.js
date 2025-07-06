@@ -3,11 +3,13 @@ import React, { useState } from 'react';
 import { View, Text, Button, StyleSheet } from 'react-native';
 import { doc, setDoc, Timestamp } from 'firebase/firestore';
 import { db, auth } from '../firebase';
+import { useNavigation } from '@react-navigation/native';
 
 const DateTracker = () => {
   const [dateStarted, setDateStarted] = useState(null);
   const [mood, setMood] = useState(null);
   const [isDateActive, setIsDateActive] = useState(false);
+  const navigation = useNavigation();
 
   const startDate = () => {
     const now = Timestamp.now();
@@ -31,6 +33,8 @@ const DateTracker = () => {
     setIsDateActive(false);
     setMood(null);
     setDateStarted(null);
+
+    navigation.navigate('PostDateQuestions');
   };
 
   return (
