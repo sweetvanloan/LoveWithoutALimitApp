@@ -58,3 +58,7 @@ const styles = StyleSheet.create({
 });
 
 export default MatchConsentScreen;
+
+// Update DateTracker.js to auto-navigate to PostDateQuestions.js
+// Add the following lines to the endDate function in DateTracker.js:
+// navigation.navigate('PostDateQuestions');
