@@ -11,6 +11,7 @@ const emojiOptions = ['❤️', '😂', '👍', '😢', '🔥'];
 const ChatScreen = () => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
   const route = useRoute();
   const { matchedUserId } = route.params;
   const currentUser = auth.currentUser;
@@ -32,9 +33,17 @@ const ChatScreen = () => {
     const messagesRef = collection(db, 'chats', chatId, 'messages');
     const q = query(messagesRef, orderBy('timestamp'));
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
       const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setMessages(msgs);
+
+      // Mark messages as read
+      snapshot.docs.forEach(async (docSnap) => {
+        const data = docSnap.data();
+        if (!data.read && data.senderId !== currentUser.uid) {
+          await updateDoc(docSnap.ref, { read: true });
+        }
+      });
     });
 
     return unsubscribe;
@@ -100,6 +109,9 @@ const ChatScreen = () => {
                   </TouchableOpacity>
                 ))}
               </ScrollView>
+              {item.read && item.senderId === currentUser.uid && (
+                <Text style={styles.readReceipt}>Seen</Text>
+              )}
             </TouchableOpacity>
           </View>
         )}
@@ -107,7 +119,10 @@ const ChatScreen = () => {
       <View style={styles.inputContainer}>
         <TextInput
           value={newMessage}
-          onChangeText={setNewMessage}
+          onChangeText={text => {
+            setNewMessage(text);
+            setIsTyping(text.length > 0);
+          }}
           placeholder="Type your message..."
           style={styles.input}
         />
@@ -129,7 +144,8 @@ const styles = StyleSheet.create({
   avatar: { width: 30, height: 30, borderRadius: 15, marginRight: 5 },
   sharedImage: { width: 150, height: 150, borderRadius: 10, marginTop: 5 },
   emojiBar: { flexDirection: 'row', marginTop: 5 },
-  emoji: { fontSize: 18, marginHorizontal: 4 }
+  emoji: { fontSize: 18, marginHorizontal: 4 },
+  readReceipt: { fontSize: 10, color: '#888', marginTop: 2 }
 });
 
 export default ChatScreen;
