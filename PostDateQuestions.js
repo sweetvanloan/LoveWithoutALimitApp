@@ -1,8 +1,8 @@
 // File: PostDateQuestions.js
-import React, { useState } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, Button, StyleSheet, Alert, FlatList } from 'react-native';
 import { db, auth } from '../firebase';
-import { doc, setDoc, Timestamp } from 'firebase/firestore';
+import { doc, setDoc, Timestamp, collection, query, where, addDoc, onSnapshot, orderBy } from 'firebase/firestore';
 import { useNavigation, useRoute } from '@react-navigation/native';
 
 const PostDateQuestions = () => {
@@ -87,3 +87,75 @@ const styles = StyleSheet.create({
 });
 
 export default PostDateQuestions;
+
+// File: ChatScreen.js
+import React, { useState, useEffect } from 'react';
+import { View, TextInput, Button, FlatList, Text, StyleSheet } from 'react-native';
+import { db, auth } from '../firebase';
+import { collection, query, where, orderBy, addDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { useRoute } from '@react-navigation/native';
+
+const ChatScreen = () => {
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
+  const route = useRoute();
+  const { matchedUserId } = route.params;
+  const currentUser = auth.currentUser;
+
+  useEffect(() => {
+    const chatId = [currentUser.uid, matchedUserId].sort().join('_');
+    const messagesRef = collection(db, 'chats', chatId, 'messages');
+    const q = query(messagesRef, orderBy('timestamp'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setMessages(msgs);
+    });
+
+    return unsubscribe;
+  }, [matchedUserId]);
+
+  const sendMessage = async () => {
+    const chatId = [currentUser.uid, matchedUserId].sort().join('_');
+    const messagesRef = collection(db, 'chats', chatId, 'messages');
+    await addDoc(messagesRef, {
+      senderId: currentUser.uid,
+      text: newMessage,
+      timestamp: serverTimestamp()
+    });
+    setNewMessage('');
+  };
+
+  return (
+    <View style={styles.chatContainer}>
+      <FlatList
+        data={messages}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <Text style={item.senderId === currentUser.uid ? styles.myMessage : styles.theirMessage}>
+            {item.text}
+          </Text>
+        )}
+      />
+      <View style={styles.inputContainer}>
+        <TextInput
+          value={newMessage}
+          onChangeText={setNewMessage}
+          placeholder="Type your message..."
+          style={styles.input}
+        />
+        <Button title="Send" onPress={sendMessage} />
+      </View>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  chatContainer: { flex: 1, padding: 10, backgroundColor: '#fff' },
+  inputContainer: { flexDirection: 'row', alignItems: 'center', padding: 5 },
+  input: { flex: 1, borderColor: '#ccc', borderWidth: 1, borderRadius: 20, padding: 10, marginRight: 10 },
+  myMessage: { alignSelf: 'flex-end', backgroundColor: '#dcf8c6', padding: 10, marginVertical: 5, borderRadius: 10 },
+  theirMessage: { alignSelf: 'flex-start', backgroundColor: '#eee', padding: 10, marginVertical: 5, borderRadius: 10 }
+});
+
+export default ChatScreen;
