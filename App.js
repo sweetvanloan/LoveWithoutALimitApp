@@ -10,6 +10,16 @@ import * as Device from 'expo-device';
 import { setDoc, doc } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import * as Notifications from 'expo-notifications';
+import { useEffect } from 'react';
+import { registerForPushNotificationsAsync } from './utils/notifications';
+import { auth } from './firebase';
+
+useEffect(() => {
+  if (auth.currentUser) {
+    registerForPushNotificationsAsync(auth.currentUser.uid);
+  }
+}, []);
+
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
