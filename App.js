@@ -9,6 +9,16 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { setDoc, doc } from 'firebase/firestore';
 import { auth, db } from './firebase';
+import * as Notifications from 'expo-notifications';
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: false,
+    shouldSetBadge: false,
+  }),
+});
+
 
 const registerForPushNotificationsAsync = async () => {
   if (Device.isDevice) {
