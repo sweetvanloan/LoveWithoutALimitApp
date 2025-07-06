@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, Alert } from 'react-native';
 import { db, auth } from '../firebase';
 import { doc, setDoc, Timestamp } from 'firebase/firestore';
+import { useNavigation, useRoute } from '@react-navigation/native';
 
 const PostDateQuestions = () => {
   const [responses, setResponses] = useState({
@@ -11,6 +12,10 @@ const PostDateQuestions = () => {
     uncomfortable: '',
     nextSteps: ''
   });
+
+  const navigation = useNavigation();
+  const route = useRoute();
+  const returnTo = route.params?.returnTo || 'Home';
 
   const handleChange = (field, value) => {
     setResponses((prev) => ({ ...prev, [field]: value }));
@@ -27,6 +32,7 @@ const PostDateQuestions = () => {
       });
       Alert.alert('Saved', 'Your reflection has been saved.');
       setResponses({ safe: '', happy: '', uncomfortable: '', nextSteps: '' });
+      navigation.navigate(returnTo);
     } catch (error) {
       console.error('Error saving reflection:', error);
     }
@@ -68,7 +74,7 @@ const PostDateQuestions = () => {
         onChangeText={(text) => handleChange('nextSteps', text)}
       />
 
-      <Button title="Save Reflection" onPress={handleSubmit} />
+      <Button title="Save Reflection & Return Home" onPress={handleSubmit} />
     </View>
   );
 };
