@@ -47,4 +47,46 @@ export default function App() {
   );
 }
 
+const sendPushNotification = async (token, body) => {
+  await fetch('https://exp.host/--/api/v2/push/send', {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Accept-encoding': 'gzip, deflate',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      to: token,
+      sound: 'default',
+      title: 'New Message 💌',
+      body,
+    }),
+  });
+};
+
+const sendMessage = async () => {
+  if (!newMessage.trim() && !selectedImage) return;
+  const chatId = [currentUser.uid, matchedUserId].sort().join('_');
+  const messagesRef = collection(db, 'chats', chatId, 'messages');
+
+  await addDoc(messagesRef, {
+    senderId: currentUser.uid,
+    text: newMessage,
+    image: selectedImage,
+    timestamp: serverTimestamp(),
+    read: false,
+    emojiReaction: null
+  });
+
+  // Fetch matched user's token
+  const userDoc = await getDoc(doc(db, 'users', matchedUserId));
+  const recipient = userDoc.data();
+  if (recipient?.expoPushToken) {
+    await sendPushNotification(recipient.expoPushToken, `${currentUser.displayName || 'Someone'}: ${newMessage}`);
+  }
+
+  setNewMessage('');
+  setSelectedImage(null);
+};
+
 registerForPushNotificationsAsync()
