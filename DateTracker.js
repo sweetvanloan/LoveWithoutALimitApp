@@ -34,7 +34,7 @@ const DateTracker = () => {
     setMood(null);
     setDateStarted(null);
 
-    navigation.navigate('PostDateQuestions');
+    navigation.navigate('PostDateQuestions', { returnTo: 'Home' });
   };
 
   return (
