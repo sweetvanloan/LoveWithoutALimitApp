@@ -2,6 +2,8 @@ import React from 'react';
 import { View, Button, Text } from 'react-native';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth } from '../firebase';
+import { registerForPushNotificationsAsync } from './utils/notificationUtils';
+
 
 const LoginScreen = () => {
   const handleLogin = async () => {
