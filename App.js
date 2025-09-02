@@ -13,6 +13,8 @@ import * as Notifications from 'expo-notifications';
 import { useEffect } from 'react';
 import { registerForPushNotificationsAsync } from './utils/notifications';
 import { auth } from './firebase';
+import { registerForPushNotificationsAsync } from './utils/notificationUtils';
+
 
 useEffect(() => {
   if (auth.currentUser) {
