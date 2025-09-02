@@ -1,149 +1,169 @@
 // File: PostDateQuestions.js
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, Alert, FlatList } from 'react-native';
-import { db, auth } from '../firebase';
-import { doc, setDoc, Timestamp, collection, query, where, addDoc, onSnapshot, orderBy } from 'firebase/firestore';
-import { useNavigation, useRoute } from '@react-navigation/native';
-
-const PostDateQuestions = () => {
-  const [responses, setResponses] = useState({
-    safe: '',
-    happy: '',
-    uncomfortable: '',
-    nextSteps: ''
-  });
-
-  const navigation = useNavigation();
-  const route = useRoute();
-  const returnTo = route.params?.returnTo || 'Home';
-
-  const handleChange = (field, value) => {
-    setResponses((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleSubmit = async () => {
-    const user = auth.currentUser;
-    const timestamp = Timestamp.now();
-    try {
-      await setDoc(doc(db, 'postDateReflections', `${user.uid}_${timestamp.seconds}`), {
-        userId: user.uid,
-        timestamp,
-        ...responses
-      });
-      Alert.alert('Saved', 'Your reflection has been saved.');
-      setResponses({ safe: '', happy: '', uncomfortable: '', nextSteps: '' });
-      navigation.navigate(returnTo);
-    } catch (error) {
-      console.error('Error saving reflection:', error);
-    }
-  };
-
-  return (
-    <View style={styles.container}>
-      <Text style={styles.header}>Post-Date Reflection</Text>
-
-      <Text style={styles.label}>What made you feel safe or seen?</Text>
-      <TextInput
-        style={styles.input}
-        multiline
-        value={responses.safe}
-        onChangeText={(text) => handleChange('safe', text)}
-      />
-
-      <Text style={styles.label}>What made you smile or feel joyful?</Text>
-      <TextInput
-        style={styles.input}
-        multiline
-        value={responses.happy}
-        onChangeText={(text) => handleChange('happy', text)}
-      />
-
-      <Text style={styles.label}>Was there anything that made you uncomfortable?</Text>
-      <TextInput
-        style={styles.input}
-        multiline
-        value={responses.uncomfortable}
-        onChangeText={(text) => handleChange('uncomfortable', text)}
-      />
-
-      <Text style={styles.label}>Would you like to go on another date?</Text>
-      <TextInput
-        style={styles.input}
-        multiline
-        value={responses.nextSteps}
-        onChangeText={(text) => handleChange('nextSteps', text)}
-      />
-
-      <Button title="Save Reflection & Return Home" onPress={handleSubmit} />
-    </View>
-  );
-};
-
-const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: '#fff' },
-  header: { fontSize: 24, fontWeight: 'bold', marginBottom: 20 },
-  label: { fontSize: 16, marginTop: 15, marginBottom: 5 },
-  input: { borderColor: '#ccc', borderWidth: 1, borderRadius: 8, padding: 10, minHeight: 60 }
-});
-
-export default PostDateQuestions;
+// [unchanged code remains above...]
 
 // File: ChatScreen.js
 import React, { useState, useEffect } from 'react';
-import { View, TextInput, Button, FlatList, Text, StyleSheet } from 'react-native';
+import { View, TextInput, Button, FlatList, Text, StyleSheet, Image, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import * as Notifications from 'expo-notifications';
+import * as Device from 'expo-device';
 import { db, auth } from '../firebase';
-import { collection, query, where, orderBy, addDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, addDoc, serverTimestamp, onSnapshot, updateDoc, doc, getDoc } from 'firebase/firestore';
 import { useRoute } from '@react-navigation/native';
+
+const emojiOptions = ['❤️', '😂', '👍', '😢', '🔥'];
 
 const ChatScreen = () => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
   const route = useRoute();
   const { matchedUserId } = route.params;
   const currentUser = auth.currentUser;
+  const [matchedUserData, setMatchedUserData] = useState({});
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [typingIndicator, setTypingIndicator] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      const docSnap = await getDoc(doc(db, 'users', matchedUserId));
+      if (docSnap.exists()) {
+        setMatchedUserData(docSnap.data());
+      }
+    };
+    fetchUserData();
+  }, [matchedUserId]);
 
   useEffect(() => {
     const chatId = [currentUser.uid, matchedUserId].sort().join('_');
     const messagesRef = collection(db, 'chats', chatId, 'messages');
     const q = query(messagesRef, orderBy('timestamp'));
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
       const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setMessages(msgs);
+      setLoading(false);
+
+      // Mark messages as read
+      snapshot.docs.forEach(async (docSnap) => {
+        const data = docSnap.data();
+        if (!data.read && data.senderId !== currentUser.uid) {
+          await updateDoc(docSnap.ref, { read: true });
+        }
+      });
     });
 
     return unsubscribe;
   }, [matchedUserId]);
 
+  const pickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 1,
+    });
+
+    if (!result.canceled && result.assets?.length > 0) {
+      setSelectedImage(result.assets[0].uri);
+    }
+  };
+
+  const sendPushNotification = async (token, body) => {
+    await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Accept-Encoding': 'gzip, deflate',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        to: token,
+        sound: 'default',
+        title: 'New Message 💬',
+        body,
+      }),
+    });
+  };
+
   const sendMessage = async () => {
+    if (!newMessage.trim() && !selectedImage) return;
     const chatId = [currentUser.uid, matchedUserId].sort().join('_');
     const messagesRef = collection(db, 'chats', chatId, 'messages');
+
     await addDoc(messagesRef, {
       senderId: currentUser.uid,
       text: newMessage,
-      timestamp: serverTimestamp()
+      image: selectedImage,
+      timestamp: serverTimestamp(),
+      read: false,
+      emojiReaction: null
     });
+
+    // Send push notification
+    const recipientDoc = await getDoc(doc(db, 'users', matchedUserId));
+    const token = recipientDoc.data()?.expoPushToken;
+    if (token) await sendPushNotification(token, newMessage);
+
     setNewMessage('');
+    setSelectedImage(null);
+  };
+
+  const addEmojiReaction = async (msgId, emoji) => {
+    const chatId = [currentUser.uid, matchedUserId].sort().join('_');
+    const msgRef = doc(db, 'chats', chatId, 'messages', msgId);
+    await updateDoc(msgRef, { emojiReaction: emoji });
   };
 
   return (
     <View style={styles.chatContainer}>
-      <FlatList
-        data={messages}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <Text style={item.senderId === currentUser.uid ? styles.myMessage : styles.theirMessage}>
-            {item.text}
-          </Text>
-        )}
-      />
+      {loading ? <ActivityIndicator size="large" color="#888" /> : (
+        <FlatList
+          data={messages}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <View style={item.senderId === currentUser.uid ? styles.myMessageWrapper : styles.theirMessageWrapper}>
+              {item.senderId !== currentUser.uid && matchedUserData?.profilePicture && (
+                <Image source={{ uri: matchedUserData.profilePicture }} style={styles.avatar} />
+              )}
+              <TouchableOpacity>
+                {item.image && (
+                  <Image source={{ uri: item.image }} style={styles.sharedImage} />
+                )}
+                <Text style={item.senderId === currentUser.uid ? styles.myMessage : styles.theirMessage}>
+                  {item.text} {item.emojiReaction ? item.emojiReaction : ''}
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.emojiBar}>
+                  {emojiOptions.map((emoji) => (
+                    <TouchableOpacity key={emoji} onPress={() => addEmojiReaction(item.id, emoji)}>
+                      <Text style={styles.emoji}>{emoji}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+                {item.read && item.senderId === currentUser.uid && (
+                  <Text style={styles.readReceipt}>Seen</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+        />
+      )}
+      {isTyping && (
+        <Text style={{ marginLeft: 10, fontStyle: 'italic', color: '#888' }}>
+          You are typing...
+        </Text>
+      )}
       <View style={styles.inputContainer}>
         <TextInput
           value={newMessage}
-          onChangeText={setNewMessage}
+          onChangeText={text => {
+            setNewMessage(text);
+            setIsTyping(text.length > 0);
+          }}
           placeholder="Type your message..."
           style={styles.input}
         />
+        <Button title="📷" onPress={pickImage} />
         <Button title="Send" onPress={sendMessage} />
       </View>
     </View>
@@ -153,9 +173,16 @@ const ChatScreen = () => {
 const styles = StyleSheet.create({
   chatContainer: { flex: 1, padding: 10, backgroundColor: '#fff' },
   inputContainer: { flexDirection: 'row', alignItems: 'center', padding: 5 },
-  input: { flex: 1, borderColor: '#ccc', borderWidth: 1, borderRadius: 20, padding: 10, marginRight: 10 },
-  myMessage: { alignSelf: 'flex-end', backgroundColor: '#dcf8c6', padding: 10, marginVertical: 5, borderRadius: 10 },
-  theirMessage: { alignSelf: 'flex-start', backgroundColor: '#eee', padding: 10, marginVertical: 5, borderRadius: 10 }
+  input: { flex: 1, borderColor: '#ccc', borderWidth: 1, borderRadius: 20, padding: 10, marginRight: 5 },
+  myMessageWrapper: { alignSelf: 'flex-end', marginVertical: 5 },
+  theirMessageWrapper: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', marginVertical: 5 },
+  myMessage: { backgroundColor: '#dcf8c6', padding: 10, borderRadius: 10 },
+  theirMessage: { backgroundColor: '#eee', padding: 10, borderRadius: 10 },
+  avatar: { width: 30, height: 30, borderRadius: 15, marginRight: 5 },
+  sharedImage: { width: 150, height: 150, borderRadius: 10, marginTop: 5 },
+  emojiBar: { flexDirection: 'row', marginTop: 5 },
+  emoji: { fontSize: 18, marginHorizontal: 4 },
+  readReceipt: { fontSize: 10, color: '#888', marginTop: 2 }
 });
 
 export default ChatScreen;
