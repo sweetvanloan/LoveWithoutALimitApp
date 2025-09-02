@@ -3,6 +3,11 @@ import { View, Text, Button } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { registerForPushNotificationsAsync } from './utils/notificationUtils';
 
+useEffect(() => {
+  registerForPushNotificationsAsync();
+}, []);
+
+
 
 const HomeScreen = () => {
   const navigation = useNavigation();
