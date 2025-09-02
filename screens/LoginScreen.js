@@ -4,6 +4,11 @@ import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth } from '../firebase';
 import { registerForPushNotificationsAsync } from './utils/notificationUtils';
 
+useEffect(() => {
+  registerForPushNotificationsAsync();
+}, []);
+
+
 
 const LoginScreen = () => {
   const handleLogin = async () => {
